@@ -1,0 +1,45 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Transactions collection
+    // Setiap pengguna hanya bisa membaca, menulis, mengubah,
+    // dan menghapus transaksi miliknya sendiri.
+    match /transactions/{transactionId} {
+
+      // Allow read only if authenticated and owns the document
+      allow read: if request.auth != null
+                  && request.auth.uid == resource.data.ownerId;
+
+      // Allow create only if:
+      // 1. User is authenticated
+      // 2. ownerId matches the authenticated user's UID
+      // 3. Required fields are present
+      allow create: if request.auth != null
+                    && request.auth.uid == request.resource.data.ownerId
+                    && request.resource.data.keys().hasAll([
+                         'ownerId', 'title', 'amount', 'type',
+                         'category', 'date', 'createdAt', 'updatedAt'
+                       ])
+                    && request.resource.data.amount is number
+                    && request.resource.data.amount > 0
+                    && request.resource.data.type in ['income', 'expense'];
+
+      // Allow update only if:
+      // 1. User is authenticated and owns the document
+      // 2. ownerId is NOT being changed
+      allow update: if request.auth != null
+                    && request.auth.uid == resource.data.ownerId
+                    && request.resource.data.ownerId == resource.data.ownerId;
+
+      // Allow delete only if authenticated and owns the document
+      allow delete: if request.auth != null
+                    && request.auth.uid == resource.data.ownerId;
+    }
+
+    // Deny all other reads/writes
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
